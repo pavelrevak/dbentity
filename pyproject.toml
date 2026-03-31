@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbentity"
+dynamic = ["version"]
+description = "Lightweight Python ORM library for PostgreSQL"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    { name = "Pavel Revak", email = "pavel.revak@gmail.com" }
+]
+keywords = ["orm", "postgresql", "database", "entity", "sql"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/pavelrevak/dbentity"
+
+[tool.setuptools.packages.find]
+include = ["dbentity*"]
+
+[tool.setuptools_scm]
+write_to = "dbentity/_version.py"
+fallback_version = "0.0.0"

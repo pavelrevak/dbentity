@@ -1,0 +1,13 @@
+__pycache__
+build
+dist
+.*
+!.gitignore
+!.github
+!.mpyproject
+*.egg-info
+_version.py
+*.md
+!README*.md
+scripts/
+*.whl
