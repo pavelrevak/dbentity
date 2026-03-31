@@ -19,9 +19,11 @@ from dbentity.db_control import (
     GroupBy,
     Limit,
     Offset,
+    BaseJoin,
     LeftJoin,
     RightJoin,
-    BaseJoin,
+    InnerJoin,
+    FullJoin,
     EntityControlError,
 )
 from dbentity.attribute import (
@@ -224,6 +226,8 @@ class TestJoin(unittest.TestCase):
     def test_base_join_type(self):
         self.assertEqual(LeftJoin.JOIN_TYPE, 'LEFT')
         self.assertEqual(RightJoin.JOIN_TYPE, 'RIGHT')
+        self.assertEqual(InnerJoin.JOIN_TYPE, 'INNER')
+        self.assertEqual(FullJoin.JOIN_TYPE, 'FULL')
 
     def test_find_conn_attr(self):
         join = LeftJoin('author')

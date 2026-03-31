@@ -326,3 +326,11 @@ class LeftJoin(BaseJoin):
 
 class RightJoin(BaseJoin):
     JOIN_TYPE = 'RIGHT'
+
+
+class InnerJoin(BaseJoin):
+    JOIN_TYPE = 'INNER'
+
+
+class FullJoin(BaseJoin):
+    JOIN_TYPE = 'FULL'
