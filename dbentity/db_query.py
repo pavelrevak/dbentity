@@ -1,13 +1,14 @@
+"""SQL query builders for SELECT, DELETE, COUNT operations."""
+
 import dbentity.db_control as _db_control
 
 
 class QueryError(Exception):
-    """General Data object error"""
+    """Query building error."""
 
 
-class BaseQuery():
-    """Base query
-    """
+class BaseQuery:
+    """Base class for query builders."""
     def __init__(self, entity, *args, **kwargs):
         self._entity = entity
         self._where = _db_control.And(*args, **kwargs)
@@ -34,8 +35,7 @@ class BaseQuery():
 
 
 class Select(BaseQuery):
-    """Select query
-    """
+    """SELECT query builder with support for JOIN, ORDER BY, LIMIT, etc."""
     def __init__(self, entity, *args, **kwargs):
         self._columns = []
         self._select_parts = []
@@ -81,7 +81,7 @@ class Select(BaseQuery):
         self.extend_select_parts(self._entity.select_parts())
         self.extend_columns(self._entity.table_columns())
         for control in args:
-            if isinstance(control, (_db_control.LeftJoin, _db_control.RightJoin)):
+            if isinstance(control, _db_control.BaseJoin):
                 control.process(self)
             elif isinstance(control, _db_control.OrderBy):
                 self.add_order_part(control.get_order_part(self._entity))
@@ -129,8 +129,7 @@ class Select(BaseQuery):
 
 
 class Delete(BaseQuery):
-    """Delete query
-    """
+    """DELETE query builder."""
 
     @property
     def query_str(self):
@@ -143,8 +142,7 @@ class Delete(BaseQuery):
 
 
 class Count(BaseQuery):
-    """Count query
-    """
+    """SELECT COUNT(*) query builder."""
 
     @property
     def query_str(self):

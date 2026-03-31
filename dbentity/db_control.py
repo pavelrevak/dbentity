@@ -1,17 +1,20 @@
+"""Query control classes for building SQL WHERE, ORDER BY, JOIN clauses."""
+
 import dbentity.attribute as _attribute
 
 
 class EntityControlError(Exception):
-    """General Data object error"""
+    """Query control error."""
 
 
-class Control():
+class Control:
+    """Base class for query controls."""
+
     pass
 
 
 class Where(Control):
-    """Where
-    """
+    """WHERE clause with AND logic. Pass kwargs for equality checks."""
     def __init__(self, *args, **kwargs):
         self._args = args
         self._kwargs = kwargs
@@ -86,50 +89,42 @@ class Where(Control):
 
 
 class And(Where):
-    """Where AND
-    """
+    """WHERE clause with AND logic (same as Where)."""
     # @property
     # def where_part(self):
     #     return ' AND '.join(self._where_parts)
 
 
 class Or(Where):
-    """Where OR
-    """
+    """WHERE clause with OR logic."""
     @property
     def where_part(self):
         return ' OR '.join(self._where_parts)
 
 
 class Not(Where):
-    """Where NOT
-    """
+    """WHERE clause with NOT prefix on each condition."""
     def add_where_part(self, part):
         if part:
             self._where_parts.append('NOT ' + part)
 
 
 class Nand(Not):
-    """Where NAND
-
-    NAND is not needed, is default in all statements
-    """
+    """WHERE clause with NOT prefix and AND logic."""
     # @property
     # def where_part(self):
     #     return ' AND '.join(self._where_parts)
 
 
 class Nor(Not):
-    """Where NOR
-    """
+    """WHERE clause with NOT prefix and OR logic."""
     @property
     def where_part(self):
         return ' OR '.join(self._where_parts)
 
 
 class Lt(Where):
-    """Less than
-    """
+    """Less than (<) comparison."""
     def process(self, entity, alias):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
@@ -142,8 +137,7 @@ class Lt(Where):
 
 
 class Gt(Where):
-    """Greater than
-    """
+    """Greater than (>) comparison."""
     def process(self, entity, alias):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
@@ -156,8 +150,7 @@ class Gt(Where):
 
 
 class Le(Where):
-    """Less than
-    """
+    """Less than or equal (<=) comparison."""
     def process(self, entity, alias):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
@@ -170,8 +163,7 @@ class Le(Where):
 
 
 class Ge(Where):
-    """Greater than
-    """
+    """Greater than or equal (>=) comparison."""
     def process(self, entity, alias):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
@@ -184,8 +176,7 @@ class Ge(Where):
 
 
 class BitwiseAnd(Where):
-    """BitWise AND
-    """
+    """Bitwise AND check (value & mask > 0)."""
     def process(self, entity, alias):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
@@ -198,8 +189,7 @@ class BitwiseAnd(Where):
 
 
 class Like(Where):
-    """LIKE pattern matching (case sensitive)
-    """
+    """LIKE pattern matching (case sensitive). Use % as wildcard."""
     def process(self, entity, alias):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
@@ -212,8 +202,7 @@ class Like(Where):
 
 
 class ILike(Where):
-    """ILIKE pattern matching (case insensitive, PostgreSQL)
-    """
+    """ILIKE pattern matching (case insensitive, PostgreSQL only)."""
     def process(self, entity, alias):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
@@ -226,8 +215,7 @@ class ILike(Where):
 
 
 class IsNull(Where):
-    """IS NULL check
-    """
+    """IS NULL check. Pass column names as positional args."""
     def __init__(self, *columns):
         super().__init__()
         self._columns = columns
@@ -242,8 +230,7 @@ class IsNull(Where):
 
 
 class IsNotNull(Where):
-    """IS NOT NULL check
-    """
+    """IS NOT NULL check. Pass column names as positional args."""
     def __init__(self, *columns):
         super().__init__()
         self._columns = columns
@@ -258,8 +245,7 @@ class IsNotNull(Where):
 
 
 class Between(Where):
-    """BETWEEN range check
-    """
+    """BETWEEN range check (min <= value <= max)."""
     def __init__(self, column, min_val, max_val):
         super().__init__()
         self._column = column
@@ -277,6 +263,8 @@ class Between(Where):
 
 
 class GroupBy(Control):
+    """GROUP BY clause."""
+
     def __init__(self, column):
         self._column = column
 
@@ -291,6 +279,8 @@ class GroupBy(Control):
 
 
 class OrderBy(Control):
+    """ORDER BY clause."""
+
     def __init__(self, column, direction=None):
         self._column = column
         self._direction = direction
@@ -308,16 +298,22 @@ class OrderBy(Control):
 
 
 class OrderByAsc(OrderBy):
+    """ORDER BY column ASC."""
+
     def __init__(self, column):
         super().__init__(column, 'ASC')
 
 
 class OrderByDesc(OrderBy):
+    """ORDER BY column DESC."""
+
     def __init__(self, column):
         super().__init__(column, 'DESC')
 
 
 class Limit(Control):
+    """LIMIT clause."""
+
     def __init__(self, limit):
         self._limit = limit
 
@@ -326,14 +322,18 @@ class Limit(Control):
 
 
 class Offset(Control):
-    def __init__(self, limit):
-        self._limit = limit
+    """OFFSET clause."""
+
+    def __init__(self, offset):
+        self._limit = offset
 
     def get_offset(self):
         return f'OFFSET {self._limit:d}'
 
 
 class BaseJoin(Control):
+    """Base class for JOIN operations on ConnectionAttribute."""
+
     JOIN_TYPE = ''
 
     def __init__(self, column, *args, **kwargs):
@@ -381,7 +381,7 @@ class BaseJoin(Control):
         self._where.process(sub_entity, alias)
         query.where.add_where(self._where)
         for control in self._args:
-            if isinstance(control, (LeftJoin, RightJoin)):
+            if isinstance(control, BaseJoin):
                 control.add_join(query, sub_entity, alias)
             elif isinstance(control, OrderBy):
                 query.add_order_part(control.get_order_part(
@@ -399,16 +399,24 @@ class BaseJoin(Control):
 
 
 class LeftJoin(BaseJoin):
+    """LEFT JOIN - all rows from left table, matching from right."""
+
     JOIN_TYPE = 'LEFT'
 
 
 class RightJoin(BaseJoin):
+    """RIGHT JOIN - all rows from right table, matching from left."""
+
     JOIN_TYPE = 'RIGHT'
 
 
 class InnerJoin(BaseJoin):
+    """INNER JOIN - only matching rows from both tables."""
+
     JOIN_TYPE = 'INNER'
 
 
 class FullJoin(BaseJoin):
+    """FULL JOIN - all rows from both tables."""
+
     JOIN_TYPE = 'FULL'

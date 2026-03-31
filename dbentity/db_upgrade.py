@@ -1,3 +1,5 @@
+"""Database schema migration utilities."""
+
 import os as _os
 
 
@@ -27,6 +29,15 @@ def _execute_sql_file(cur, sql_file_name):
 
 
 def db_upgrade(db, log, sql_path, sql_init_file, sql_upgrade_files):
+    """Run database migrations.
+
+    Args:
+        db: Database connection with execute(), cursor(), commit(), transaction().
+        log: Logger with info() method.
+        sql_path: Directory containing SQL files.
+        sql_init_file: Initial schema file (run if db_version table missing).
+        sql_upgrade_files: List of (version, filename) tuples for incremental upgrades.
+    """
     db_version = _get_db_version(db)
     if db_version is None:
         log.info("Creating all tables")

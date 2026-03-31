@@ -1,12 +1,20 @@
+"""Database entity module with CRUD operations."""
+
 import dbentity.db_query as _db_query
 import dbentity.entity as _entity
 
 
 class DbEntityError(_entity.EntityError):
-    """General Data object error"""
+    """Database entity error."""
 
 
 class DbEntity(_entity.Entity):
+    """Entity with database operations.
+
+    Requires TABLE class attribute. Provides db_list(), db_get(),
+    create(), db_save(), db_update(), db_delete() methods.
+    """
+
     TABLE = ''
 
     def __init__(self, data=None):
@@ -38,12 +46,14 @@ class DbEntity(_entity.Entity):
         self._loaded = True
 
     def db_save(self, db):
+        """Save entity to database. Calls db_insert() or db_update()."""
         if self._data.get('uid'):
             self.db_update(db)
         else:
             self.db_insert(db)
 
     def db_insert(self, db):
+        """Insert entity into database."""
         insert_columns = []
         insert_values = []
         insert_args = []
@@ -60,7 +70,7 @@ class DbEntity(_entity.Entity):
         self._updated.clear()
 
     def db_update(self, db):
-        """Update stored data into database"""
+        """Update modified attributes in database."""
         if not self._updated:
             return
         query_str = f"UPDATE {self.TABLE} SET "
@@ -77,14 +87,14 @@ class DbEntity(_entity.Entity):
         self._updated.clear()
 
     def db_delete(self, db):
-        """delete this item from DB"""
+        """Delete this entity from database."""
         query_str = f"DELETE FROM {self.TABLE}"
         query_str += ' WHERE id=%s;'
         db.execute(query_str, (self.uid, ))
 
     @classmethod
     def delete_by(cls, db, *args, **kwargs):
-        """delete from database"""
+        """Delete matching rows from database."""
         query = _db_query.Delete(cls, *args, **kwargs)
         query_str = query.query_str
         db.execute(query_str, query.args)
@@ -119,6 +129,7 @@ class DbEntity(_entity.Entity):
 
     @classmethod
     def db_list(cls, db, *args, **kwargs):
+        """Return list of entities matching criteria."""
         query = _db_query.Select(cls, *args, **kwargs)
         rows = db.execute(query.query_str, query.args).fetchall()
         output = [query.create_dataobject(row) for row in rows]
@@ -126,6 +137,7 @@ class DbEntity(_entity.Entity):
 
     @classmethod
     def db_get(cls, db, *args, **kwargs):
+        """Return first entity matching criteria or None."""
         query = _db_query.Select(cls, *args, **kwargs)
         row = db.execute(query.query_str, query.args).fetchone()
         output = None
@@ -135,14 +147,14 @@ class DbEntity(_entity.Entity):
 
     @classmethod
     def db_count(cls, db, *args, **kwargs):
-        """Count matching rows"""
+        """Return count of matching rows."""
         query = _db_query.Count(cls, *args, **kwargs)
         row = db.execute(query.query_str, query.args).fetchone()
         return row[0] if row else 0
 
     @classmethod
     def db_exists(cls, db, *args, **kwargs):
-        """Check if any matching row exists"""
+        """Return True if any matching row exists."""
         return cls.db_count(db, *args, **kwargs) > 0
 
     @classmethod
@@ -167,6 +179,7 @@ class DbEntity(_entity.Entity):
 
     @classmethod
     def create(cls, db, **kwargs):
+        """Create new entity in database and return it."""
         insert_str, insert_args = cls._insert(**kwargs)
         row = db.execute(insert_str, insert_args).fetchone()
         if row:
@@ -176,6 +189,7 @@ class DbEntity(_entity.Entity):
 
     @classmethod
     def create_from_form_data(cls, db, params, **kwargs):
+        """Create entity from form data using form_key mappings."""
         data = {}
         for item in cls.ITEMS:
             form_key = item.form_key

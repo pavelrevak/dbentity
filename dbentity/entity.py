@@ -1,21 +1,36 @@
+"""Base entity module for data objects."""
+
 import uuid as _uuid
 
 
 class EntityError(Exception):
-    """General Data object error"""
+    """General entity error."""
 
 
-class Entity():
+class Entity:
+    """Base class for data objects.
+
+    Define attributes via ITEMS tuple. Handles attribute access,
+    locking, and serialization (JSON, templates, forms).
+    """
+
     ITEMS = tuple()
 
     @classmethod
     def get_item(cls, name):
+        """Get attribute definition by name."""
         for item in cls.ITEMS:
             if item.is_name(name):
                 return item
         return None
 
     def __init__(self, data=None, lock=True):
+        """Initialize entity.
+
+        Args:
+            data: Initial data as dict or iterable of (name, value) pairs.
+            lock: If True, prevent adding new attributes after init.
+        """
         if not self.ITEMS:
             raise EntityError("Entity has not defined ITEMS")
         self._loaded = False
@@ -30,6 +45,7 @@ class Entity():
 
     @property
     def updated(self):
+        """Return True if any attribute was modified."""
         return len(self._updated) > 0
 
     def _set_data(self, data):
@@ -83,9 +99,11 @@ class Entity():
         return f'{self.__class__.__name__}({repr(self._data)})'
 
     def get(self, item):
+        """Get attribute value by Attribute instance."""
         return item.to_value(self._data.get(item.name))
 
     def get_template_data(self):
+        """Return dict with all attributes formatted for templates."""
         data = {}
         for item in self.ITEMS:
             value = self._data.get(item.name)
@@ -101,6 +119,11 @@ class Entity():
         return data
 
     def get_json_data(self, recursive=True):
+        """Return dict with all attributes formatted for JSON.
+
+        Args:
+            recursive: If True, include nested entities.
+        """
         data = {}
         for item in self.ITEMS:
             value = self._data.get(item.name)
@@ -115,6 +138,7 @@ class Entity():
         return data
 
     def set_from_form_data(self, params):
+        """Update entity from form data dict using form_key mappings."""
         for item in self.ITEMS:
             form_key = item.form_key
             if form_key:

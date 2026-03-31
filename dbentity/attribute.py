@@ -1,17 +1,19 @@
+"""Attribute types for entity field definitions."""
+
 import time as _time
 import datetime as _datetime
 
 
 class AttributeException(Exception):
-    """General Data object error"""
+    """Base exception for attribute errors."""
 
 
 class NumberOutOfRangeException(AttributeException):
-    """If number is out of range"""
+    """Raised when number is out of defined min/max range."""
 
 
 class WrongNumberFormatException(AttributeException):
-    """If number is out of range"""
+    """Raised when value cannot be parsed as number."""
 
 
 def last_time_to_string(secondsf):
@@ -40,7 +42,9 @@ def last_time_to_string(secondsf):
     return since_str
 
 
-class Attribute():
+class Attribute:
+    """Base class for entity attribute definitions."""
+
     CREATE = True
     SAVE = True
     INDEX = False
@@ -48,12 +52,15 @@ class Attribute():
     CONNECTIONS = False
     FUNCTION = None
 
-    def __init__(
-            self,
-            name,
-            db_key=None,
-            form_key=None,
-            default=None):
+    def __init__(self, name, db_key=None, form_key=None, default=None):
+        """Initialize attribute.
+
+        Args:
+            name: Attribute name used in Python code.
+            db_key: Database column name. Defaults to name.
+            form_key: Form field name for form data binding.
+            default: Default value when None.
+        """
         self._name = name
         self._db_key = db_key
         self._form_key = form_key
@@ -107,14 +114,22 @@ class Attribute():
 
 
 class IndexAttribute(Attribute):
+    """Primary key attribute. Not included in INSERT/UPDATE.
+
+    Default name is 'uid' mapping to 'id' column.
+    """
+
     CREATE = False
     SAVE = False
     INDEX = True
 
-    def __init__(
-            self,
-            name=None,
-            db_key=None):
+    def __init__(self, name=None, db_key=None):
+        """Initialize index attribute.
+
+        Args:
+            name: Attribute name. Defaults to 'uid'.
+            db_key: Column name. Defaults to 'id'.
+        """
         if name is None:
             name = 'uid'
             if db_key is None:
@@ -123,10 +138,14 @@ class IndexAttribute(Attribute):
 
 
 class CreateIndexAttribute(IndexAttribute):
+    """Primary key that is included in INSERT (for client-generated IDs)."""
+
     CREATE = True
 
 
 class DatetimeAttribute(Attribute):
+    """Datetime attribute with automatic formatting."""
+
     def to_json(self, value):
         if isinstance(value, _datetime.datetime):
             return {
@@ -147,6 +166,8 @@ class DatetimeAttribute(Attribute):
 
 
 class LastTimeAttribute(Attribute):
+    """Timestamp attribute that returns elapsed time since stored value."""
+
     def to_json(self, value):
         if isinstance(value, (int, float)):
             return _time.time() - value
@@ -167,18 +188,26 @@ class LastTimeAttribute(Attribute):
 
 
 class MinLastTimeAttribute(Attribute):
+    """Aggregate MIN of timestamp values."""
+
     FUNCTION = 'MIN'
 
 
 class MaxLastTimeAttribute(Attribute):
+    """Aggregate MAX of timestamp values."""
+
     FUNCTION = 'MAX'
 
 
 class StringAttribute(Attribute):
+    """Text/string attribute."""
+
     pass
 
 
 class BytesAttribute(Attribute):
+    """Binary data attribute."""
+
     def to_json(self, value):
         if value is None:
             return None
@@ -191,11 +220,15 @@ class BytesAttribute(Attribute):
 
 
 class PasswordAttribute(Attribute):
+    """Password attribute. Always returns empty string in templates."""
+
     def to_template(self, value):
         return ""
 
 
 class BooleanAttribute(Attribute):
+    """Boolean attribute."""
+
     def from_form(self, value):
         if value is None and self._default is not None:
             value = self._default
@@ -203,14 +236,11 @@ class BooleanAttribute(Attribute):
 
 
 class IntegerAttribute(Attribute):
+    """Integer attribute with optional min/max validation."""
+
     def __init__(
-            self,
-            name,
-            db_key=None,
-            form_key=None,
-            default=None,
-            minimal=None,
-            maximal=None):
+            self, name, db_key=None, form_key=None, default=None,
+            minimal=None, maximal=None):
         self._min = minimal
         self._max = maximal
         super().__init__(
@@ -233,16 +263,13 @@ class IntegerAttribute(Attribute):
 
 
 class SumIntegerAttribute(Attribute):
+    """Integer attribute with SUM aggregation."""
+
     FUNCTION = 'SUM'
 
     def __init__(
-            self,
-            name,
-            db_key=None,
-            form_key=None,
-            default=None,
-            minimal=None,
-            maximal=None):
+            self, name, db_key=None, form_key=None, default=None,
+            minimal=None, maximal=None):
         self._min = minimal
         self._max = maximal
         super().__init__(
@@ -253,14 +280,11 @@ class SumIntegerAttribute(Attribute):
 
 
 class IntegerArrayAttribute(Attribute):
+    """Array of integers attribute."""
+
     def __init__(
-            self,
-            name,
-            db_key=None,
-            form_key=None,
-            default=None,
-            minimal=None,
-            maximal=None):
+            self, name, db_key=None, form_key=None, default=None,
+            minimal=None, maximal=None):
         self._min = minimal
         self._max = maximal
         super().__init__(
@@ -289,15 +313,14 @@ class IntegerArrayAttribute(Attribute):
 
 
 class FixedPointAttribute(Attribute):
+    """Fixed-point decimal attribute. Stored as integer, converted on access.
+
+    fp parameter defines decimal places (e.g., fp=2 means value * 100).
+    """
+
     def __init__(
-            self,
-            name,
-            db_key=None,
-            form_key=None,
-            default=None,
-            fp=0,
-            minimal=None,
-            maximal=None):
+            self, name, db_key=None, form_key=None, default=None, fp=0,
+            minimal=None, maximal=None):
         self._fp = fp
         self._min = minimal
         self._max = maximal
@@ -337,17 +360,13 @@ class FixedPointAttribute(Attribute):
 
 
 class SumFixedPointAttribute(Attribute):
+    """Fixed-point attribute with SUM aggregation."""
+
     FUNCTION = 'SUM'
 
     def __init__(
-            self,
-            name,
-            db_key=None,
-            form_key=None,
-            default=None,
-            fp=0,
-            minimal=None,
-            maximal=None):
+            self, name, db_key=None, form_key=None, default=None, fp=0,
+            minimal=None, maximal=None):
         self._fp = fp
         self._min = minimal
         self._max = maximal
@@ -369,15 +388,15 @@ class SumFixedPointAttribute(Attribute):
 
 
 class ConnectionAttribute(Attribute):
+    """Foreign key relationship attribute.
+
+    Creates a join to another entity. The db_key defaults to '{name}_id'.
+    """
+
     SAVE = False
     CONNECTION = True
 
-    def __init__(
-            self,
-            name,
-            sub_entity=None,
-            db_key=None,
-            conn_key=None):
+    def __init__(self, name, sub_entity=None, db_key=None, conn_key=None):
         self._sub_entity = sub_entity
         self._conn_key = conn_key
         super().__init__(name, db_key=db_key)
@@ -404,12 +423,12 @@ class ConnectionAttribute(Attribute):
 
 
 class SubElementsAttribute(Attribute):
+    """One-to-many relationship attribute (not persisted)."""
+
     SAVE = False
     CONNECTIONS = True
 
-    def __init__(
-            self,
-            name):
+    def __init__(self, name):
         super().__init__(name, db_key=False)
 
     @property
