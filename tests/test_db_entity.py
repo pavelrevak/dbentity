@@ -157,6 +157,12 @@ class TestDbEntityClassMethods(unittest.TestCase):
     def test_delete_by_method_exists(self):
         self.assertTrue(hasattr(User, 'delete_by'))
 
+    def test_db_count_method_exists(self):
+        self.assertTrue(hasattr(User, 'db_count'))
+
+    def test_db_exists_method_exists(self):
+        self.assertTrue(hasattr(User, 'db_exists'))
+
 
 if __name__ == '__main__':
     unittest.main()

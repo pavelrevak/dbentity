@@ -1,7 +1,7 @@
 import unittest
 
 from dbentity.db_entity import DbEntity
-from dbentity.db_query import Select, Delete, QueryError
+from dbentity.db_query import Select, Delete, Count, QueryError
 from dbentity.db_control import (
     Where,
     And,
@@ -216,6 +216,30 @@ class TestQueryIntegration(unittest.TestCase):
         self.assertIn('ORDER BY', sql)
         self.assertIn('LIMIT 10', sql)
         self.assertIn('OFFSET 0', sql)
+
+
+class TestCount(unittest.TestCase):
+    def test_simple_count(self):
+        query = Count(User)
+        sql = query.query_str
+        self.assertIn('SELECT COUNT(*)', sql)
+        self.assertIn('FROM users', sql)
+        self.assertTrue(sql.endswith(';'))
+
+    def test_count_with_where(self):
+        query = Count(User, name='John')
+        sql = query.query_str
+        self.assertIn('SELECT COUNT(*)', sql)
+        self.assertIn('WHERE', sql)
+        self.assertIn('users.name = %s', sql)
+        self.assertEqual(query.args, ['John'])
+
+    def test_count_with_multiple_conditions(self):
+        query = Count(User, name='John', age=30)
+        sql = query.query_str
+        self.assertIn('WHERE', sql)
+        self.assertIn('AND', sql)
+        self.assertEqual(len(query.args), 2)
 
 
 if __name__ == '__main__':

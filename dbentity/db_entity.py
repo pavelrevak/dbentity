@@ -134,6 +134,18 @@ class DbEntity(_entity.Entity):
         return output
 
     @classmethod
+    def db_count(cls, db, *args, **kwargs):
+        """Count matching rows"""
+        query = _db_query.Count(cls, *args, **kwargs)
+        row = db.execute(query.query_str, query.args).fetchone()
+        return row[0] if row else 0
+
+    @classmethod
+    def db_exists(cls, db, *args, **kwargs):
+        """Check if any matching row exists"""
+        return cls.db_count(db, *args, **kwargs) > 0
+
+    @classmethod
     def _insert(cls, **kwargs):
         insert_columns = []
         insert_values = []

@@ -13,6 +13,11 @@ from dbentity.db_control import (
     Le,
     Ge,
     BitwiseAnd,
+    Like,
+    ILike,
+    IsNull,
+    IsNotNull,
+    Between,
     OrderBy,
     OrderByAsc,
     OrderByDesc,
@@ -176,6 +181,62 @@ class TestComparison(unittest.TestCase):
         where.process(TestUser, 'users')
         self.assertIn('&', where.where_part)
         self.assertIn('> 0', where.where_part)
+
+
+class TestLikeOperators(unittest.TestCase):
+    def test_like(self):
+        where = Like(name='John%')
+        where.process(TestUser, 'users')
+        self.assertEqual(where.where_part, 'users.name LIKE %s')
+        self.assertEqual(where.args, ['John%'])
+
+    def test_ilike(self):
+        where = ILike(name='%john%')
+        where.process(TestUser, 'users')
+        self.assertEqual(where.where_part, 'users.name ILIKE %s')
+        self.assertEqual(where.args, ['%john%'])
+
+    def test_like_unknown_column(self):
+        where = Like(unknown='test')
+        with self.assertRaises(EntityControlError):
+            where.process(TestUser, 'users')
+
+
+class TestNullOperators(unittest.TestCase):
+    def test_is_null(self):
+        where = IsNull('name')
+        where.process(TestUser, 'users')
+        self.assertEqual(where.where_part, 'users.name IS NULL')
+        self.assertEqual(where.args, [])
+
+    def test_is_null_multiple(self):
+        where = IsNull('name', 'age')
+        where.process(TestUser, 'users')
+        self.assertIn('users.name IS NULL', where.where_part)
+        self.assertIn('users.age IS NULL', where.where_part)
+
+    def test_is_not_null(self):
+        where = IsNotNull('name')
+        where.process(TestUser, 'users')
+        self.assertEqual(where.where_part, 'users.name IS NOT NULL')
+
+    def test_is_null_unknown_column(self):
+        where = IsNull('unknown')
+        with self.assertRaises(EntityControlError):
+            where.process(TestUser, 'users')
+
+
+class TestBetween(unittest.TestCase):
+    def test_between(self):
+        where = Between('age', 18, 65)
+        where.process(TestUser, 'users')
+        self.assertEqual(where.where_part, 'users.age BETWEEN %s AND %s')
+        self.assertEqual(where.args, [18, 65])
+
+    def test_between_unknown_column(self):
+        where = Between('unknown', 1, 10)
+        with self.assertRaises(EntityControlError):
+            where.process(TestUser, 'users')
 
 
 class TestOrderBy(unittest.TestCase):

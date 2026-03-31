@@ -140,3 +140,17 @@ class Delete(BaseQuery):
         query_str = ' '.join(query)
         query_str += ";"
         return query_str
+
+
+class Count(BaseQuery):
+    """Count query
+    """
+
+    @property
+    def query_str(self):
+        query = [f"SELECT COUNT(*) FROM {self._entity.TABLE}"]
+        if self._where.count_parts:
+            query.append(f"WHERE {self._where.where_part}")
+        query_str = ' '.join(query)
+        query_str += ";"
+        return query_str

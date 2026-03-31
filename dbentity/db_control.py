@@ -190,12 +190,90 @@ class BitwiseAnd(Where):
         for key, val in self._kwargs.items():
             item = entity.get_item(key)
             if item:
-                # if val is not None:
                 if val:
                     self.add_where_part(f'{alias}.{item.db_key} & %s > 0')
                     self.add_where_arg(val)
             else:
                 raise EntityControlError(f"Unknown argument '{key}'")
+
+
+class Like(Where):
+    """LIKE pattern matching (case sensitive)
+    """
+    def process(self, entity, alias):
+        for key, val in self._kwargs.items():
+            item = entity.get_item(key)
+            if item:
+                if val is not None:
+                    self.add_where_part(f'{alias}.{item.db_key} LIKE %s')
+                    self.add_where_arg(val)
+            else:
+                raise EntityControlError(f"Unknown argument '{key}'")
+
+
+class ILike(Where):
+    """ILIKE pattern matching (case insensitive, PostgreSQL)
+    """
+    def process(self, entity, alias):
+        for key, val in self._kwargs.items():
+            item = entity.get_item(key)
+            if item:
+                if val is not None:
+                    self.add_where_part(f'{alias}.{item.db_key} ILIKE %s')
+                    self.add_where_arg(val)
+            else:
+                raise EntityControlError(f"Unknown argument '{key}'")
+
+
+class IsNull(Where):
+    """IS NULL check
+    """
+    def __init__(self, *columns):
+        super().__init__()
+        self._columns = columns
+
+    def process(self, entity, alias):
+        for col in self._columns:
+            item = entity.get_item(col)
+            if item:
+                self.add_where_part(f'{alias}.{item.db_key} IS NULL')
+            else:
+                raise EntityControlError(f"Unknown argument '{col}'")
+
+
+class IsNotNull(Where):
+    """IS NOT NULL check
+    """
+    def __init__(self, *columns):
+        super().__init__()
+        self._columns = columns
+
+    def process(self, entity, alias):
+        for col in self._columns:
+            item = entity.get_item(col)
+            if item:
+                self.add_where_part(f'{alias}.{item.db_key} IS NOT NULL')
+            else:
+                raise EntityControlError(f"Unknown argument '{col}'")
+
+
+class Between(Where):
+    """BETWEEN range check
+    """
+    def __init__(self, column, min_val, max_val):
+        super().__init__()
+        self._column = column
+        self._min = min_val
+        self._max = max_val
+
+    def process(self, entity, alias):
+        item = entity.get_item(self._column)
+        if item:
+            self.add_where_part(f'{alias}.{item.db_key} BETWEEN %s AND %s')
+            self.add_where_arg(self._min)
+            self.add_where_arg(self._max)
+        else:
+            raise EntityControlError(f"Unknown argument '{self._column}'")
 
 
 class GroupBy(Control):
