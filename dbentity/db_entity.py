@@ -158,6 +158,42 @@ class DbEntity(_entity.Entity):
         return cls.db_count(db, *args, **kwargs) > 0
 
     @classmethod
+    def db_distinct(cls, db, columns, *args, **kwargs):
+        """Return distinct values for column(s).
+
+        Args:
+            columns: column name or tuple/list of column names
+            *args: controls (OrderBy, Where, etc.)
+            **kwargs: WHERE conditions
+
+        Returns:
+            List of values (single column) or list of tuples (multiple columns)
+        """
+        if isinstance(columns, str):
+            columns = (columns,)
+
+        select_parts = []
+        order_parts = []
+        for col in columns:
+            item = cls.get_item(col)
+            if not item:
+                raise DbEntityError(f"Unknown column '{col}'")
+            select_parts.append(f"{cls.TABLE}.{item.db_key}")
+            order_parts.append(f"{cls.TABLE}.{item.db_key}")
+
+        query = _db_query.Select(cls, *args, **kwargs)
+        query_str = f"SELECT DISTINCT {', '.join(select_parts)}"
+        query_str += f" FROM {cls.TABLE}"
+        if query.where.count_parts:
+            query_str += f" WHERE {query.where.where_part}"
+        query_str += f" ORDER BY {', '.join(order_parts)};"
+
+        rows = db.execute(query_str, query.args).fetchall()
+        if len(columns) == 1:
+            return [row[0] for row in rows]
+        return rows
+
+    @classmethod
     def _insert(cls, **kwargs):
         insert_columns = []
         insert_values = []

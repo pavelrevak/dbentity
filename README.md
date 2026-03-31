@@ -79,6 +79,7 @@ Entity with database operations.
 | `db_get(db, *args, **kwargs)` | Return first matching entity or None. |
 | `db_count(db, *args, **kwargs)` | Return count of matching rows. |
 | `db_exists(db, *args, **kwargs)` | Return True if any match exists. |
+| `db_distinct(db, columns, *args, **kwargs)` | Return distinct values for column(s). |
 | `create(db, **kwargs)` | Create and return new entity. |
 | `db_save(db)` | Insert or update entity. |
 | `db_insert(db)` | Insert entity. |
@@ -278,6 +279,25 @@ User.db_count(db, active=True)
 # Exists
 User.db_exists(db, name='John')
 # Returns: True/False
+```
+
+### Distinct
+
+```python
+# Single column - returns list of values
+User.db_distinct(db, 'name')
+# SQL: SELECT DISTINCT users.name FROM users ORDER BY users.name;
+# Returns: ['Alice', 'Bob', 'John']
+
+# Multiple columns - returns list of tuples
+User.db_distinct(db, ('name', 'age'))
+# SQL: SELECT DISTINCT users.name, users.age FROM users ORDER BY users.name, users.age;
+# Returns: [('Alice', 25), ('Bob', 30), ('John', 35)]
+
+# With WHERE condition
+User.db_distinct(db, 'name', active=True)
+# SQL: SELECT DISTINCT users.name FROM users WHERE users.active = %s ORDER BY users.name;
+# Args: [True]
 ```
 
 ### Delete

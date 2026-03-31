@@ -163,6 +163,60 @@ class TestDbEntityClassMethods(unittest.TestCase):
     def test_db_exists_method_exists(self):
         self.assertTrue(hasattr(User, 'db_exists'))
 
+    def test_db_distinct_method_exists(self):
+        self.assertTrue(hasattr(User, 'db_distinct'))
+
+
+class MockCursor:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+
+class MockDb:
+    def __init__(self, rows):
+        self._rows = rows
+        self.last_query = None
+        self.last_args = None
+
+    def execute(self, query, args=None):
+        self.last_query = query
+        self.last_args = args
+        return MockCursor(self._rows)
+
+
+class TestDbDistinct(unittest.TestCase):
+    def test_distinct_single_column(self):
+        db = MockDb([('SK',), ('CZ',), ('PL',)])
+        result = User.db_distinct(db, 'name')
+        self.assertEqual(result, ['SK', 'CZ', 'PL'])
+        self.assertIn('SELECT DISTINCT', db.last_query)
+        self.assertIn('users.name', db.last_query)
+        self.assertIn('ORDER BY', db.last_query)
+
+    def test_distinct_multiple_columns(self):
+        db = MockDb([('SK', 30), ('CZ', 25), ('PL', 40)])
+        result = User.db_distinct(db, ('name', 'age'))
+        self.assertEqual(result, [('SK', 30), ('CZ', 25), ('PL', 40)])
+        self.assertIn('SELECT DISTINCT', db.last_query)
+        self.assertIn('users.name', db.last_query)
+        self.assertIn('users.age', db.last_query)
+
+    def test_distinct_with_where(self):
+        db = MockDb([('John',)])
+        result = User.db_distinct(db, 'name', age=30)
+        self.assertEqual(result, ['John'])
+        self.assertIn('WHERE', db.last_query)
+        self.assertIn('users.age = %s', db.last_query)
+        self.assertEqual(db.last_args, [30])
+
+    def test_distinct_unknown_column(self):
+        db = MockDb([])
+        with self.assertRaises(DbEntityError):
+            User.db_distinct(db, 'unknown_column')
+
 
 if __name__ == '__main__':
     unittest.main()
