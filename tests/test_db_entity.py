@@ -218,5 +218,54 @@ class TestDbDistinct(unittest.TestCase):
             User.db_distinct(db, 'unknown_column')
 
 
+class TestDbCountBy(unittest.TestCase):
+    def test_count_by_single_column(self):
+        db = MockDb([('SK', 150), ('CZ', 80), ('PL', 45)])
+        result = User.db_count_by(db, 'name')
+        self.assertEqual(result, [('SK', 150), ('CZ', 80), ('PL', 45)])
+        self.assertIn('SELECT', db.last_query)
+        self.assertIn('users.name', db.last_query)
+        self.assertIn('COUNT(*)', db.last_query)
+        self.assertIn('GROUP BY', db.last_query)
+        self.assertIn('ORDER BY _cnt DESC', db.last_query)
+
+    def test_count_by_multiple_columns(self):
+        db = MockDb([('SK', 30, 50), ('SK', 25, 40), ('CZ', 30, 30)])
+        result = User.db_count_by(db, ('name', 'age'))
+        self.assertEqual(
+            result,
+            [(('SK', 30), 50), (('SK', 25), 40), (('CZ', 30), 30)])
+        self.assertIn('users.name', db.last_query)
+        self.assertIn('users.age', db.last_query)
+        self.assertIn('GROUP BY', db.last_query)
+
+    def test_count_by_with_where(self):
+        db = MockDb([('SK', 100)])
+        result = User.db_count_by(db, 'name', age=30)
+        self.assertEqual(result, [('SK', 100)])
+        self.assertIn('WHERE', db.last_query)
+        self.assertIn('users.age = %s', db.last_query)
+        self.assertEqual(db.last_args, [30])
+
+    def test_count_by_with_limit(self):
+        from dbentity.db_control import Limit
+        db = MockDb([('SK', 150), ('CZ', 80)])
+        result = User.db_count_by(db, 'name', Limit(2))
+        self.assertEqual(result, [('SK', 150), ('CZ', 80)])
+        self.assertIn('LIMIT 2', db.last_query)
+
+    def test_count_by_order_asc(self):
+        from dbentity.db_control import OrderByAsc
+        db = MockDb([('PL', 45), ('CZ', 80), ('SK', 150)])
+        result = User.db_count_by(db, 'name', OrderByAsc('_cnt'))
+        self.assertEqual(result, [('PL', 45), ('CZ', 80), ('SK', 150)])
+        self.assertIn('ORDER BY _cnt ASC', db.last_query)
+
+    def test_count_by_unknown_column(self):
+        db = MockDb([])
+        with self.assertRaises(DbEntityError):
+            User.db_count_by(db, 'unknown_column')
+
+
 if __name__ == '__main__':
     unittest.main()

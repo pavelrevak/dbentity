@@ -1,5 +1,6 @@
 """Database entity module with CRUD operations."""
 
+import dbentity.db_control as _db_control
 import dbentity.db_query as _db_query
 import dbentity.entity as _entity
 
@@ -192,6 +193,62 @@ class DbEntity(_entity.Entity):
         if len(columns) == 1:
             return [row[0] for row in rows]
         return rows
+
+    @classmethod
+    def db_count_by(cls, db, columns, *args, **kwargs):
+        """Return count grouped by column(s).
+
+        Args:
+            columns: column name or tuple/list of column names
+            *args: controls (Limit, Offset, Where, OrderByAsc/Desc('_cnt'))
+            **kwargs: WHERE conditions
+
+        Returns:
+            List of tuples: [(value, count), ...] for single column
+            or [(values_tuple, count), ...] for multiple columns.
+            Ordered by count DESC by default. Use OrderByAsc('_cnt') for ASC.
+        """
+        if isinstance(columns, str):
+            columns = (columns,)
+
+        select_parts = []
+        group_parts = []
+        for col in columns:
+            item = cls.get_item(col)
+            if not item:
+                raise DbEntityError(f"Unknown column '{col}'")
+            select_parts.append(f"{cls.TABLE}.{item.db_key}")
+            group_parts.append(f"{cls.TABLE}.{item.db_key}")
+
+        select_parts.append("COUNT(*) AS _cnt")
+
+        order_by = "ORDER BY _cnt DESC"
+        filtered_args = []
+        for arg in args:
+            if isinstance(arg, _db_control.OrderBy) and arg._column == '_cnt':
+                direction = arg._direction or ''
+                order_by = f"ORDER BY _cnt {direction}".rstrip()
+            else:
+                filtered_args.append(arg)
+
+        query = _db_query.Select(cls, *filtered_args, **kwargs)
+
+        query_str = f"SELECT {', '.join(select_parts)}"
+        query_str += f" FROM {cls.TABLE}"
+        if query.where.count_parts:
+            query_str += f" WHERE {query.where.where_part}"
+        query_str += f" GROUP BY {', '.join(group_parts)}"
+        query_str += f" {order_by}"
+        if query._limit:
+            query_str += f" {query._limit}"
+        if query._offset:
+            query_str += f" {query._offset}"
+        query_str += ";"
+
+        rows = db.execute(query_str, query.args).fetchall()
+        if len(columns) == 1:
+            return [(row[0], row[-1]) for row in rows]
+        return [(row[:-1], row[-1]) for row in rows]
 
     @classmethod
     def _insert(cls, **kwargs):

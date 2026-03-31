@@ -78,6 +78,7 @@ Entity with database operations.
 | `db_list(db, *args, **kwargs)` | Return list of matching entities. |
 | `db_get(db, *args, **kwargs)` | Return first matching entity or None. |
 | `db_count(db, *args, **kwargs)` | Return count of matching rows. |
+| `db_count_by(db, columns, *args, **kwargs)` | Return count grouped by column(s). |
 | `db_exists(db, *args, **kwargs)` | Return True if any match exists. |
 | `db_distinct(db, columns, *args, **kwargs)` | Return distinct values for column(s). |
 | `create(db, **kwargs)` | Create and return new entity. |
@@ -298,6 +299,31 @@ User.db_distinct(db, ('name', 'age'))
 User.db_distinct(db, 'name', active=True)
 # SQL: SELECT DISTINCT users.name FROM users WHERE users.active = %s ORDER BY users.name;
 # Args: [True]
+```
+
+### Count By (GROUP BY)
+
+```python
+# Single column - returns list of (value, count) tuples, ordered by count DESC
+User.db_count_by(db, 'country')
+# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users GROUP BY users.country ORDER BY _cnt DESC;
+# Returns: [('SK', 150), ('CZ', 80), ('PL', 45)]
+
+# Multiple columns - returns list of ((values), count) tuples
+User.db_count_by(db, ('country', 'role'))
+# SQL: SELECT users.country, users.role, COUNT(*) AS _cnt
+#      FROM users GROUP BY users.country, users.role ORDER BY _cnt DESC;
+# Returns: [(('SK', 'user'), 140), (('SK', 'admin'), 10), (('CZ', 'user'), 75)]
+
+# With WHERE and LIMIT
+User.db_count_by(db, 'country', Limit(5), active=True)
+# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users
+#      WHERE users.active = %s GROUP BY users.country ORDER BY _cnt DESC LIMIT 5;
+# Args: [True]
+
+# Order by count ASC (least first)
+User.db_count_by(db, 'country', OrderByAsc('_cnt'))
+# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users GROUP BY users.country ORDER BY _cnt ASC;
 ```
 
 ### Delete

@@ -152,6 +152,23 @@ class TestSelectJoin(unittest.TestCase):
         self.assertIn('name = %s', sql)
         self.assertEqual(query.args, ['John'])
 
+    def test_select_self_join(self):
+        class Employee(DbEntity):
+            TABLE = 'employees'
+            ITEMS = (
+                IndexAttribute(),
+                StringAttribute('name'),
+                ConnectionAttribute('manager'),
+            )
+        Employee.ITEMS[2]._sub_entity = Employee
+
+        query = Select(Employee, LeftJoin('manager'))
+        sql = query.query_str
+        self.assertIn('LEFT JOIN employees AS __manager', sql)
+        self.assertIn('ON employees.manager_id = __manager.id', sql)
+        self.assertIn('__manager.id', sql)
+        self.assertIn('__manager.name', sql)
+
 
 class TestSelectColumns(unittest.TestCase):
     def test_columns_match_items(self):
