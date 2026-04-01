@@ -227,7 +227,7 @@ class TestDbCountBy(unittest.TestCase):
         self.assertIn('users.name', db.last_query)
         self.assertIn('COUNT(*)', db.last_query)
         self.assertIn('GROUP BY', db.last_query)
-        self.assertIn('ORDER BY _cnt DESC', db.last_query)
+        self.assertNotIn('ORDER BY', db.last_query)
 
     def test_count_by_multiple_columns(self):
         db = MockDb([('SK', 30, 50), ('SK', 25, 40), ('CZ', 30, 30)])

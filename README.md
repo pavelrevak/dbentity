@@ -304,26 +304,29 @@ User.db_distinct(db, 'name', active=True)
 ### Count By (GROUP BY)
 
 ```python
-# Single column - returns list of (value, count) tuples, ordered by count DESC
+# Single column - returns list of (value, count) tuples
 User.db_count_by(db, 'country')
-# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users GROUP BY users.country ORDER BY _cnt DESC;
+# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users GROUP BY users.country;
 # Returns: [('SK', 150), ('CZ', 80), ('PL', 45)]
 
 # Multiple columns - returns list of ((values), count) tuples
 User.db_count_by(db, ('country', 'role'))
 # SQL: SELECT users.country, users.role, COUNT(*) AS _cnt
-#      FROM users GROUP BY users.country, users.role ORDER BY _cnt DESC;
+#      FROM users GROUP BY users.country, users.role;
 # Returns: [(('SK', 'user'), 140), (('SK', 'admin'), 10), (('CZ', 'user'), 75)]
 
-# With WHERE and LIMIT
-User.db_count_by(db, 'country', Limit(5), active=True)
-# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users
-#      WHERE users.active = %s GROUP BY users.country ORDER BY _cnt DESC LIMIT 5;
-# Args: [True]
+# Order by count DESC (most first)
+User.db_count_by(db, 'country', OrderByDesc('_cnt'))
+# SQL: SELECT ... GROUP BY users.country ORDER BY _cnt DESC;
 
 # Order by count ASC (least first)
 User.db_count_by(db, 'country', OrderByAsc('_cnt'))
-# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users GROUP BY users.country ORDER BY _cnt ASC;
+# SQL: SELECT ... GROUP BY users.country ORDER BY _cnt ASC;
+
+# With WHERE and LIMIT
+User.db_count_by(db, 'country', OrderByDesc('_cnt'), Limit(5), active=True)
+# SQL: SELECT users.country, COUNT(*) AS _cnt FROM users
+#      WHERE users.active = %s GROUP BY users.country ORDER BY _cnt DESC LIMIT 5;
 ```
 
 ### Delete

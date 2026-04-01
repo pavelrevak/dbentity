@@ -206,7 +206,7 @@ class DbEntity(_entity.Entity):
         Returns:
             List of tuples: [(value, count), ...] for single column
             or [(values_tuple, count), ...] for multiple columns.
-            Ordered by count DESC by default. Use OrderByAsc('_cnt') for ASC.
+            Use OrderByDesc('_cnt') or OrderByAsc('_cnt') to sort by count.
         """
         if isinstance(columns, str):
             columns = (columns,)
@@ -222,7 +222,7 @@ class DbEntity(_entity.Entity):
 
         select_parts.append("COUNT(*) AS _cnt")
 
-        order_by = "ORDER BY _cnt DESC"
+        order_by = None
         filtered_args = []
         for arg in args:
             if isinstance(arg, _db_control.OrderBy) and arg._column == '_cnt':
@@ -238,7 +238,8 @@ class DbEntity(_entity.Entity):
         if query.where.count_parts:
             query_str += f" WHERE {query.where.where_part}"
         query_str += f" GROUP BY {', '.join(group_parts)}"
-        query_str += f" {order_by}"
+        if order_by:
+            query_str += f" {order_by}"
         if query._limit:
             query_str += f" {query._limit}"
         if query._offset:
