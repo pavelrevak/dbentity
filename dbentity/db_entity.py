@@ -240,13 +240,18 @@ class DbEntity(_entity.Entity):
         query_str += f" GROUP BY {', '.join(group_parts)}"
         if order_by:
             query_str += f" {order_by}"
-        if query._limit:
-            query_str += f" {query._limit}"
-        if query._offset:
-            query_str += f" {query._offset}"
+        if query._limit_part:
+            query_str += f" {query._limit_part}"
+        if query._offset_part:
+            query_str += f" {query._offset_part}"
         query_str += ";"
 
-        rows = db.execute(query_str, query.args).fetchall()
+        args = query.where.args
+        if query._limit_arg is not None:
+            args = [*args, query._limit_arg]
+        if query._offset_arg is not None:
+            args = [*args, query._offset_arg]
+        rows = db.execute(query_str, args).fetchall()
         if len(columns) == 1:
             return [(row[0], row[-1]) for row in rows]
         return [(row[:-1], row[-1]) for row in rows]

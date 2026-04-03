@@ -92,18 +92,21 @@ class TestSelectControls(unittest.TestCase):
     def test_select_with_limit(self):
         query = Select(User, Limit(10))
         sql = query.query_str
-        self.assertIn('LIMIT 10', sql)
+        self.assertIn('LIMIT %s', sql)
+        self.assertEqual(query.args, [10])
 
     def test_select_with_offset(self):
         query = Select(User, Offset(20))
         sql = query.query_str
-        self.assertIn('OFFSET 20', sql)
+        self.assertIn('OFFSET %s', sql)
+        self.assertEqual(query.args, [20])
 
     def test_select_with_limit_and_offset(self):
         query = Select(User, Limit(10), Offset(20))
         sql = query.query_str
-        self.assertIn('LIMIT 10', sql)
-        self.assertIn('OFFSET 20', sql)
+        self.assertIn('LIMIT %s', sql)
+        self.assertIn('OFFSET %s', sql)
+        self.assertEqual(query.args, [10, 20])
 
     def test_select_with_group_by(self):
         query = Select(User, GroupBy('age'))
@@ -231,8 +234,10 @@ class TestQueryIntegration(unittest.TestCase):
         self.assertIn('users.age < %s', sql)
         self.assertIn('users.name = %s', sql)
         self.assertIn('ORDER BY', sql)
-        self.assertIn('LIMIT 10', sql)
-        self.assertIn('OFFSET 0', sql)
+        self.assertIn('LIMIT %s', sql)
+        self.assertIn('OFFSET %s', sql)
+        self.assertIn(10, query.args)
+        self.assertIn(0, query.args)
 
 
 class TestCount(unittest.TestCase):

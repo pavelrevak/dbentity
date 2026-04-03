@@ -344,6 +344,28 @@ User.delete_by(db, active=False)
 
 ---
 
+## Database Connection Wrapper
+
+### dbentity.db_connection
+
+Optional wrapper around database connection with SQL query logging.
+
+```python
+from dbentity.db_connection import DbConnection
+
+db = DbConnection(raw_connection, log=my_logger)
+
+# All queries are now logged at debug level (if log.is_debug is True)
+users = User.db_list(db, name='John')
+# LOG: SQL: SELECT users.id, users.name, users.age FROM users WHERE users.name = 'John';
+```
+
+| Class | Description |
+|-------|-------------|
+| `DbConnection(db, log=None)` | Wraps connection. Logger needs `is_debug` property and `debug()` method. |
+
+---
+
 ## Database Migrations
 
 ### dbentity.db_upgrade

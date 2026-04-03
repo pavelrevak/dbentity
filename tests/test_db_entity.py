@@ -252,7 +252,8 @@ class TestDbCountBy(unittest.TestCase):
         db = MockDb([('SK', 150), ('CZ', 80)])
         result = User.db_count_by(db, 'name', Limit(2))
         self.assertEqual(result, [('SK', 150), ('CZ', 80)])
-        self.assertIn('LIMIT 2', db.last_query)
+        self.assertIn('LIMIT %s', db.last_query)
+        self.assertIn(2, db.last_args)
 
     def test_count_by_order_asc(self):
         from dbentity.db_control import OrderByAsc

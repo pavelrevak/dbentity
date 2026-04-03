@@ -42,8 +42,10 @@ class Select(BaseQuery):
         self._join_parts = []
         self._order_parts = []
         self._group_by_parts = []
-        self._limit = None
-        self._offset = None
+        self._limit_part = None
+        self._limit_arg = None
+        self._offset_part = None
+        self._offset_arg = None
         super().__init__(entity, *args, **kwargs)
 
     def extend_columns(self, parts):
@@ -86,9 +88,9 @@ class Select(BaseQuery):
             elif isinstance(control, _db_control.OrderBy):
                 self.add_order_part(control.get_order_part(self._entity))
             elif isinstance(control, _db_control.Limit):
-                self._limit = control.get_limit()
+                self._limit_part, self._limit_arg = control.get_limit()
             elif isinstance(control, _db_control.Offset):
-                self._offset = control.get_offset()
+                self._offset_part, self._offset_arg = control.get_offset()
             elif isinstance(control, _db_control.GroupBy):
                 self.add_group_by_part(control.get_group_by_part(self._entity))
             elif isinstance(control, _db_control.Where):
@@ -111,14 +113,22 @@ class Select(BaseQuery):
             query.append(f"GROUP BY {', '.join(self._group_by_parts)}")
         if self._order_parts:
             query.append(f"ORDER BY {', '.join(self._order_parts)}")
-        if self._limit:
-            query.append(self._limit)
-        if self._offset:
-            query.append(self._offset)
+        if self._limit_part:
+            query.append(self._limit_part)
+        if self._offset_part:
+            query.append(self._offset_part)
         query_str = ' '.join(query)
         query_str += ";"
-        # print(query_str, self.args)
         return query_str
+
+    @property
+    def args(self):
+        args = self._where.args
+        if self._limit_arg is not None:
+            args = [*args, self._limit_arg]
+        if self._offset_arg is not None:
+            args = [*args, self._offset_arg]
+        return args
 
     def create_dataobject(self, row):
         if self._group_by_parts:

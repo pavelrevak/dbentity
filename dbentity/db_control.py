@@ -318,7 +318,7 @@ class Limit(Control):
         self._limit = limit
 
     def get_limit(self):
-        return f'LIMIT {self._limit:d}'
+        return 'LIMIT %s', self._limit
 
 
 class Offset(Control):
@@ -328,7 +328,7 @@ class Offset(Control):
         self._limit = offset
 
     def get_offset(self):
-        return f'OFFSET {self._limit:d}'
+        return 'OFFSET %s', self._limit
 
 
 class BaseJoin(Control):

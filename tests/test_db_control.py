@@ -276,11 +276,11 @@ class TestGroupBy(unittest.TestCase):
 class TestLimitOffset(unittest.TestCase):
     def test_limit(self):
         limit = Limit(10)
-        self.assertEqual(limit.get_limit(), 'LIMIT 10')
+        self.assertEqual(limit.get_limit(), ('LIMIT %s', 10))
 
     def test_offset(self):
         offset = Offset(20)
-        self.assertEqual(offset.get_offset(), 'OFFSET 20')
+        self.assertEqual(offset.get_offset(), ('OFFSET %s', 20))
 
 
 class TestJoin(unittest.TestCase):

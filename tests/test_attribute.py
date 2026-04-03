@@ -187,9 +187,7 @@ class TestDatetimeAttribute(unittest.TestCase):
         attr = DatetimeAttribute('created')
         dt = datetime.datetime(2024, 6, 15, 10, 30, 45)
         result = attr.to_json(dt)
-        self.assertEqual(result['datetime'], '2024-06-15 10:30:45')
-        self.assertEqual(result['datetime_short'], '20240615103045')
-        self.assertIn('timestamp', result)
+        self.assertEqual(result, '2024-06-15T10:30:45')
 
     def test_to_json_none(self):
         attr = DatetimeAttribute('created')
@@ -199,12 +197,30 @@ class TestDatetimeAttribute(unittest.TestCase):
         attr = DatetimeAttribute('created')
         dt = datetime.datetime(2024, 6, 15, 10, 30, 45)
         result = attr.to_template(dt)
-        self.assertEqual(result['datetime'], '2024-06-15 10:30:45')
-        self.assertEqual(result['datetime_short'], '20240615103045')
+        self.assertEqual(result, '2024-06-15T10:30:45')
 
     def test_to_template_none(self):
         attr = DatetimeAttribute('created')
         self.assertIsNone(attr.to_template(None))
+
+
+class TestDatetimeFullAttribute(unittest.TestCase):
+    def test_to_json(self):
+        from dbentity.attribute import DatetimeFullAttribute
+        attr = DatetimeFullAttribute('created')
+        dt = datetime.datetime(2024, 6, 15, 10, 30, 45)
+        result = attr.to_json(dt)
+        self.assertEqual(result['datetime'], '2024-06-15 10:30:45')
+        self.assertEqual(result['datetime_short'], '20240615103045')
+        self.assertIn('timestamp', result)
+
+    def test_to_template(self):
+        from dbentity.attribute import DatetimeFullAttribute
+        attr = DatetimeFullAttribute('created')
+        dt = datetime.datetime(2024, 6, 15, 10, 30, 45)
+        result = attr.to_template(dt)
+        self.assertEqual(result['datetime'], '2024-06-15 10:30:45')
+        self.assertEqual(result['datetime_short'], '20240615103045')
 
 
 class TestLastTimeAttribute(unittest.TestCase):

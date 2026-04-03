@@ -144,7 +144,21 @@ class CreateIndexAttribute(IndexAttribute):
 
 
 class DatetimeAttribute(Attribute):
-    """Datetime attribute with automatic formatting."""
+    """Datetime attribute with simple string formatting."""
+
+    def to_json(self, value):
+        if isinstance(value, _datetime.datetime):
+            return value.isoformat()
+        return value
+
+    def to_template(self, value):
+        if isinstance(value, _datetime.datetime):
+            return value.isoformat()
+        return value
+
+
+class DatetimeFullAttribute(DatetimeAttribute):
+    """Datetime attribute with full formatting (datetime, datetime_short, timestamp)."""
 
     def to_json(self, value):
         if isinstance(value, _datetime.datetime):
