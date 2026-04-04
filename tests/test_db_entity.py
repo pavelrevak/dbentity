@@ -7,6 +7,7 @@ from dbentity.attribute import (
     IntegerAttribute,
     ConnectionAttribute,
 )
+from dbentity.db_control import Gt, Limit, OrderByDesc
 
 
 class User(DbEntity):
@@ -211,6 +212,39 @@ class TestDbDistinct(unittest.TestCase):
         self.assertIn('WHERE', db.last_query)
         self.assertIn('users.age = %s', db.last_query)
         self.assertEqual(db.last_args, [30])
+
+    def test_distinct_with_order_by(self):
+        db = MockDb([('PL',), ('CZ',), ('SK',)])
+        result = User.db_distinct(db, 'name', OrderByDesc('name'))
+        self.assertEqual(result, ['PL', 'CZ', 'SK'])
+        self.assertIn('ORDER BY users.name DESC', db.last_query)
+
+    def test_distinct_with_limit(self):
+        db = MockDb([('SK',), ('CZ',)])
+        result = User.db_distinct(db, 'name', Limit(2))
+        self.assertEqual(result, ['SK', 'CZ'])
+        self.assertIn('LIMIT %s', db.last_query)
+        self.assertIn(2, db.last_args)
+
+    def test_distinct_with_all_controls(self):
+        db = MockDb([(3,), (2,), (1,)])
+        result = User.db_distinct(
+            db, 'age',
+            Gt(age=18),
+            OrderByDesc('age'),
+            Limit(3),
+        )
+        self.assertEqual(result, [3, 2, 1])
+        self.assertIn('SELECT DISTINCT', db.last_query)
+        self.assertIn('WHERE', db.last_query)
+        self.assertIn('ORDER BY users.age DESC', db.last_query)
+        self.assertIn('LIMIT %s', db.last_query)
+
+    def test_distinct_default_order_without_order_by(self):
+        db = MockDb([])
+        User.db_distinct(db, 'name')
+        self.assertIn('ORDER BY users.name', db.last_query)
+        self.assertNotIn('DESC', db.last_query)
 
     def test_distinct_unknown_column(self):
         db = MockDb([])

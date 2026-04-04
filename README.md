@@ -299,6 +299,11 @@ User.db_distinct(db, ('name', 'age'))
 User.db_distinct(db, 'name', active=True)
 # SQL: SELECT DISTINCT users.name FROM users WHERE users.active = %s ORDER BY users.name;
 # Args: [True]
+
+# With controls (OrderBy, Limit, Where conditions)
+User.db_distinct(db, 'name', Gt(age=18), OrderByDesc('name'), Limit(10))
+# SQL: SELECT DISTINCT users.name FROM users WHERE users.age > %s ORDER BY users.name DESC LIMIT %s;
+# Args: [18, 10]
 ```
 
 ### Count By (GROUP BY)

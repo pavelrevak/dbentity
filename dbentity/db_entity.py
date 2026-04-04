@@ -164,7 +164,7 @@ class DbEntity(_entity.Entity):
 
         Args:
             columns: column name or tuple/list of column names
-            *args: controls (OrderBy, Where, etc.)
+            *args: controls (OrderBy, Limit, Offset, Where, etc.)
             **kwargs: WHERE conditions
 
         Returns:
@@ -174,20 +174,29 @@ class DbEntity(_entity.Entity):
             columns = (columns,)
 
         select_parts = []
-        order_parts = []
+        default_order_parts = []
         for col in columns:
             item = cls.get_item(col)
             if not item:
                 raise DbEntityError(f"Unknown column '{col}'")
             select_parts.append(f"{cls.TABLE}.{item.db_key}")
-            order_parts.append(f"{cls.TABLE}.{item.db_key}")
+            default_order_parts.append(f"{cls.TABLE}.{item.db_key}")
 
         query = _db_query.Select(cls, *args, **kwargs)
+
         query_str = f"SELECT DISTINCT {', '.join(select_parts)}"
         query_str += f" FROM {cls.TABLE}"
         if query.where.count_parts:
             query_str += f" WHERE {query.where.where_part}"
-        query_str += f" ORDER BY {', '.join(order_parts)};"
+        if query._order_parts:
+            query_str += f" ORDER BY {', '.join(query._order_parts)}"
+        else:
+            query_str += f" ORDER BY {', '.join(default_order_parts)}"
+        if query._limit_part:
+            query_str += f" {query._limit_part}"
+        if query._offset_part:
+            query_str += f" {query._offset_part}"
+        query_str += ";"
 
         rows = db.execute(query_str, query.args).fetchall()
         if len(columns) == 1:
