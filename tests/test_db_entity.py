@@ -1,6 +1,7 @@
 import unittest
 
 from dbentity.db_entity import DbEntity, DbEntityError
+from dbentity.db_query import QueryError
 from dbentity.attribute import (
     IndexAttribute,
     StringAttribute,
@@ -248,7 +249,7 @@ class TestDbDistinct(unittest.TestCase):
 
     def test_distinct_unknown_column(self):
         db = MockDb([])
-        with self.assertRaises(DbEntityError):
+        with self.assertRaises(QueryError):
             User.db_distinct(db, 'unknown_column')
 
 
@@ -298,7 +299,7 @@ class TestDbCountBy(unittest.TestCase):
 
     def test_count_by_unknown_column(self):
         db = MockDb([])
-        with self.assertRaises(DbEntityError):
+        with self.assertRaises(QueryError):
             User.db_count_by(db, 'unknown_column')
 
 

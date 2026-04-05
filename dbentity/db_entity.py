@@ -1,6 +1,5 @@
 """Database entity module with CRUD operations."""
 
-import dbentity.db_control as _db_control
 import dbentity.db_query as _db_query
 import dbentity.entity as _entity
 
@@ -159,6 +158,14 @@ class DbEntity(_entity.Entity):
         return cls.db_count(db, *args, **kwargs) > 0
 
     @classmethod
+    def db_query(cls, *args, **kwargs):
+        """Build SELECT query without executing it.
+
+        Returns Select query object with query_str, args, create_objects().
+        """
+        return _db_query.Select(cls, *args, **kwargs)
+
+    @classmethod
     def db_distinct(cls, db, columns, *args, **kwargs):
         """Return distinct values for column(s).
 
@@ -172,33 +179,8 @@ class DbEntity(_entity.Entity):
         """
         if isinstance(columns, str):
             columns = (columns,)
-
-        select_parts = []
-        default_order_parts = []
-        for col in columns:
-            item = cls.get_item(col)
-            if not item:
-                raise DbEntityError(f"Unknown column '{col}'")
-            select_parts.append(f"{cls.TABLE}.{item.db_key}")
-            default_order_parts.append(f"{cls.TABLE}.{item.db_key}")
-
-        query = _db_query.Select(cls, *args, **kwargs)
-
-        query_str = f"SELECT DISTINCT {', '.join(select_parts)}"
-        query_str += f" FROM {cls.TABLE}"
-        if query.where.count_parts:
-            query_str += f" WHERE {query.where.where_part}"
-        if query._order_parts:
-            query_str += f" ORDER BY {', '.join(query._order_parts)}"
-        else:
-            query_str += f" ORDER BY {', '.join(default_order_parts)}"
-        if query._limit_part:
-            query_str += f" {query._limit_part}"
-        if query._offset_part:
-            query_str += f" {query._offset_part}"
-        query_str += ";"
-
-        rows = db.execute(query_str, query.args).fetchall()
+        query = _db_query.Distinct(cls, columns, *args, **kwargs)
+        rows = db.execute(query.query_str, query.args).fetchall()
         if len(columns) == 1:
             return [row[0] for row in rows]
         return rows
@@ -219,48 +201,8 @@ class DbEntity(_entity.Entity):
         """
         if isinstance(columns, str):
             columns = (columns,)
-
-        select_parts = []
-        group_parts = []
-        for col in columns:
-            item = cls.get_item(col)
-            if not item:
-                raise DbEntityError(f"Unknown column '{col}'")
-            select_parts.append(f"{cls.TABLE}.{item.db_key}")
-            group_parts.append(f"{cls.TABLE}.{item.db_key}")
-
-        select_parts.append("COUNT(*) AS _cnt")
-
-        order_by = None
-        filtered_args = []
-        for arg in args:
-            if isinstance(arg, _db_control.OrderBy) and arg._column == '_cnt':
-                direction = arg._direction or ''
-                order_by = f"ORDER BY _cnt {direction}".rstrip()
-            else:
-                filtered_args.append(arg)
-
-        query = _db_query.Select(cls, *filtered_args, **kwargs)
-
-        query_str = f"SELECT {', '.join(select_parts)}"
-        query_str += f" FROM {cls.TABLE}"
-        if query.where.count_parts:
-            query_str += f" WHERE {query.where.where_part}"
-        query_str += f" GROUP BY {', '.join(group_parts)}"
-        if order_by:
-            query_str += f" {order_by}"
-        if query._limit_part:
-            query_str += f" {query._limit_part}"
-        if query._offset_part:
-            query_str += f" {query._offset_part}"
-        query_str += ";"
-
-        args = query.where.args
-        if query._limit_arg is not None:
-            args = [*args, query._limit_arg]
-        if query._offset_arg is not None:
-            args = [*args, query._offset_arg]
-        rows = db.execute(query_str, args).fetchall()
+        query = _db_query.CountBy(cls, columns, *args, **kwargs)
+        rows = db.execute(query.query_str, query.args).fetchall()
         if len(columns) == 1:
             return [(row[0], row[-1]) for row in rows]
         return [(row[:-1], row[-1]) for row in rows]

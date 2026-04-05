@@ -371,6 +371,60 @@ users = User.db_list(db, name='John')
 
 ---
 
+## Non-blocking Query Mode
+
+For applications using `select()` event loop (not asyncio), queries can be split into
+build and execute phases. This allows sending a query to PostgreSQL and processing the
+result later when the socket becomes readable.
+
+### Building queries without execution
+
+```python
+from dbentity.db_query import Select, Distinct, CountBy
+from dbentity.db_control import Gt, OrderByDesc, Limit
+
+# SELECT query - returns Select object with query_str, args, create_objects()
+query = User.db_query(Gt(age=18), OrderByDesc('age'), Limit(10))
+query.query_str  # "SELECT ... WHERE users.age > %s ORDER BY users.age DESC LIMIT %s;"
+query.args       # [18, 10]
+
+# DISTINCT query
+query = Distinct(User, 'name', Gt(age=18), Limit(5))
+query.query_str  # "SELECT DISTINCT users.name FROM users WHERE users.age > %s ..."
+
+# COUNT BY query
+query = CountBy(User, 'country', active=True)
+query.query_str  # "SELECT users.country, COUNT(*) AS _cnt FROM users WHERE ..."
+```
+
+### Integration with select() event loop
+
+```python
+import select
+
+# 1. Build query
+query = User.db_query(Gt(age=18), OrderByDesc('age'), Limit(10))
+
+# 2. Send query non-blocking via psycopg3 libpq
+pgconn.send_query_params(
+    query.query_str.encode(),
+    [str(a).encode() for a in query.args],
+)
+
+# 3. Wait in select() loop alongside other file descriptors
+readable, _, _ = select.select([pgconn.socket, ...], [], [])
+
+# 4. When socket is readable, read result and create entity objects
+if pgconn.socket in readable:
+    pgconn.consume_input()
+    if not pgconn.is_busy():
+        result = pgconn.get_result()
+        rows = extract_rows(result)
+        users = query.create_objects(rows)  # list of User instances
+```
+
+---
+
 ## Database Migrations
 
 ### dbentity.db_upgrade
