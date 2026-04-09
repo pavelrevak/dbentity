@@ -20,7 +20,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
 ]
-dependencies = []
+dependencies = [
+    "psycopg>=3.1",
+]
 
 [project.urls]
 Homepage = "https://github.com/pavelrevak/dbentity"

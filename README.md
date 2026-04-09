@@ -15,7 +15,8 @@ pip install dbentity
 - Support for JOIN operations
 - Query builder with boolean logic (AND, OR, NOT)
 - Database migration support
-- No external dependencies
+- Non-blocking query execution for `select()`-based event loops
+- Lightweight: only `psycopg>=3.1` required
 
 ---
 
@@ -62,6 +63,15 @@ Base entity class for data objects.
 | `Entity` | Base class. Define attributes via `ITEMS` tuple. |
 | `EntityError` | Base exception. |
 
+**Entity Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `set_from_data(params)` | Update entity from data dict (e.g. JSON). Only SAVE-able, non-INDEX attributes. |
+| `set_from_form_data(params)` | Update entity from form data using form_key mappings. |
+| `get_json_data()` | Return dict formatted for JSON serialization. |
+| `get_template_data()` | Return dict formatted for templates. |
+
 ### dbentity.db_entity
 
 Entity with database operations.
@@ -82,6 +92,10 @@ Entity with database operations.
 | `db_exists(db, *args, **kwargs)` | Return True if any match exists. |
 | `db_distinct(db, columns, *args, **kwargs)` | Return distinct values for column(s). |
 | `create(db, **kwargs)` | Create and return new entity. |
+| `create_from_data(db, params, **kwargs)` | Create entity from data dict (e.g. JSON). |
+| `create_from_form_data(db, params, **kwargs)` | Create entity from form data using form_key mappings. |
+| `db_upsert(db, conflict, update=None, **kwargs)` | INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING. |
+| `upsert_from_data(db, params, conflict, update=None, **kwargs)` | Upsert from data dict (e.g. JSON). |
 | `db_save(db)` | Insert or update entity. |
 | `db_insert(db)` | Insert entity. |
 | `db_update(db)` | Update modified attributes. |
@@ -334,6 +348,67 @@ User.db_count_by(db, 'country', OrderByDesc('_cnt'), Limit(5), active=True)
 #      WHERE users.active = %s GROUP BY users.country ORDER BY _cnt DESC LIMIT 5;
 ```
 
+### Create/Update from Data (JSON)
+
+```python
+# Create from JSON data (only SAVE-able, non-INDEX attributes accepted)
+user = User.create_from_data(db, {'name': 'John', 'age': 30})
+
+# Update from JSON data
+user.set_from_data({'name': 'Jane', 'age': 25})
+user.db_save(db)
+
+# Extra kwargs are passed to create()
+user = User.create_from_data(db, {'name': 'John'}, age=30)
+```
+
+### Upsert (INSERT ... ON CONFLICT ... DO UPDATE)
+
+`db_upsert()` performs an atomic INSERT-or-UPDATE on conflict and
+returns the resulting entity. The conflict target must be backed by
+a UNIQUE constraint or unique index in the schema.
+
+```python
+# Insert or update on 'email' conflict.
+# Default: every column being inserted is updated on conflict
+# except the conflict target itself.
+user = User.db_upsert(
+    db, conflict='email',
+    email='john@example.com', name='John', age=30)
+# SQL: INSERT INTO users (email, name, age) VALUES (%s, %s, %s)
+#      ON CONFLICT (email) DO UPDATE
+#      SET name = EXCLUDED.name, age = EXCLUDED.age
+#      RETURNING users.id AS uid, users.email, ...;
+
+# Multi-column conflict target.
+mapping = ClientDevice.db_upsert(
+    db, conflict=('client_id', 'device_id'),
+    client_id=42, device_id=7, label='gate-1')
+
+# Selective update — only refresh `last_seen` on conflict.
+sess = Session.db_upsert(
+    db, conflict='token', update=['last_seen'],
+    token='abc...', user_id=1, last_seen=now)
+
+# DO NOTHING — insert if new, otherwise no-op (returns None on conflict).
+maybe = AuditLog.db_upsert(
+    db, conflict='hash', update=[],
+    hash='...', payload='...')
+
+# Upsert from JSON data dict (mirrors create_from_data).
+user = User.upsert_from_data(
+    db, {'email': 'john@example.com', 'name': 'John', 'age': 30},
+    conflict='email')
+```
+
+`uid` is returned for both INSERT and UPDATE branches (PG `RETURNING`
+fires in both cases).
+
+**Sequence burn warning:** PG calls `nextval()` on the id sequence for
+every upsert call, even when the UPDATE branch is taken. With `SERIAL`
+PKs at high upsert rates this can burn id space; prefer `BIGSERIAL` or
+natural keys for hot upsert paths.
+
 ### Delete
 
 ```python
@@ -385,8 +460,9 @@ from dbentity.db_control import Gt, OrderByDesc, Limit
 
 # SELECT query - returns Select object with query_str, args, create_objects()
 query = User.db_query(Gt(age=18), OrderByDesc('age'), Limit(10))
-query.query_str  # "SELECT ... WHERE users.age > %s ORDER BY users.age DESC LIMIT %s;"
-query.args       # [18, 10]
+query.query_str       # "SELECT ... WHERE users.age > %s ... LIMIT %s;"
+query.pg_query_bytes  # same SQL with $1, $2 placeholders for libpq
+query.args            # [18, 10]
 
 # DISTINCT query
 query = Distinct(User, 'name', Gt(age=18), Limit(5))
@@ -397,31 +473,147 @@ query = CountBy(User, 'country', active=True)
 query.query_str  # "SELECT users.country, COUNT(*) AS _cnt FROM users WHERE ..."
 ```
 
-### Integration with select() event loop
+Both `query_str` (with `%s`, for `cursor.execute()`) and `pg_query_bytes`
+(with `$1`, `$2`, for `pgconn.send_query_params()`) are exposed. The latter
+is cached on first access.
+
+### dbentity.db_async — high-level non-blocking API
+
+`dbentity.db_async` wraps the libpq plumbing in two classes:
+
+- **`AsyncQuery(conn, query)`** — drives one query through psycopg3's
+  low-level `pgconn` API. Caller registers `aq.fileno()` in their
+  `select()`/`poll()` loop and forwards `on_readable()` / `on_writable()`
+  events. When `on_readable()` returns `True`, call `aq.result()` to get
+  the same shape as `db_list()`.
+
+- **`AsyncConnectionPool(conninfo, min_size, max_size, ...)`** —
+  thread-free, lock-free pool of non-blocking connections designed for a
+  single-threaded event-loop worker. Pre-opens `min_size` conns on
+  `open()`, grows on demand up to `max_size`, refills back to `min_size`
+  on broken-release, and FIFO-rotates idle conns. Includes a connect
+  circuit breaker (see below). Includes `prune_idle(ttl)` to drop
+  long-idle conns above `min_size` from a periodic event-loop tick.
+
+#### Pool example
 
 ```python
-import select
-
-# 1. Build query
-query = User.db_query(Gt(age=18), OrderByDesc('age'), Limit(10))
-
-# 2. Send query non-blocking via psycopg3 libpq
-pgconn.send_query_params(
-    query.query_str.encode(),
-    [str(a).encode() for a in query.args],
+from dbentity.db_async import (
+    AsyncConnectionPool, AsyncQuery,
+    PoolError, PoolTimeout, PoolUnavailable,
 )
 
-# 3. Wait in select() loop alongside other file descriptors
-readable, _, _ = select.select([pgconn.socket, ...], [], [])
+pool = AsyncConnectionPool(
+    'dbname=mydb', min_size=2, max_size=10)
+pool.open()
 
-# 4. When socket is readable, read result and create entity objects
-if pgconn.socket in readable:
-    pgconn.consume_input()
-    if not pgconn.is_busy():
-        result = pgconn.get_result()
-        rows = extract_rows(result)
-        users = query.create_objects(rows)  # list of User instances
+try:
+    conn = pool.acquire()
+except PoolTimeout:
+    # All max_size conns are busy — return 503.
+    return http_503()
+except PoolUnavailable:
+    # DB is down, circuit breaker open — return 503.
+    return http_503()
+
+aq = AsyncQuery(conn, User.db_query(Gt(age=18), Limit(10)))
+try:
+    aq.start()
+    # event loop:
+    #   register_reader(aq.fileno(), on_readable_cb)
+    #   if aq.needs_write(): register_writer(aq.fileno(), on_writable_cb)
+    # in on_readable_cb:
+    #   if aq.on_readable():
+    #       users = aq.result()       # list[User]
+    #       pool.release(conn)
+except Exception:
+    pool.release(conn, broken=True)
+    raise
 ```
+
+#### Pool sizing & lifecycle
+
+- `min_size` connections are opened on `pool.open()` and the pool is
+  refilled back to `min_size` after every broken / non-IDLE release
+  (no background thread; refill happens inline in `release()`).
+- `max_size` is the hard cap on total open conns (idle + busy);
+  `acquire()` past it raises `PoolTimeout` immediately — never blocks.
+- Idle conns are recycled FIFO (oldest first) so long-lived workers
+  don't accumulate stale TCP sockets.
+- Call `pool.prune_idle(ttl_seconds)` from a periodic tick (e.g.
+  `Worker.on_idle`) to close conns idle longer than `ttl_seconds`,
+  but never below `min_size`.
+
+#### Circuit breaker (connect failure)
+
+When `_make_conn` fails, the pool opens a circuit breaker:
+
+- The first failure logs a `WARNING` with the underlying error and the
+  cooldown.
+- Cooldown follows exponential backoff `1s → 2s → 4s → 8s` (capped at
+  `COOLDOWN_MAX`) with ±25 % jitter (`COOLDOWN_JITTER`) to prevent
+  multiple workers from stampeding the recovering DB in lockstep.
+- During cooldown, every `acquire()` raises `PoolUnavailable`
+  immediately without touching the network — caller responds 503.
+- Spam protection: only one "still unavailable" `WARNING` per
+  `UNAVAILABLE_LOG_INTERVAL` (60 s default), regardless of how many
+  requests hit the breaker.
+- On the first successful reconnect after a streak, an `INFO` line is
+  logged and the breaker resets.
+
+The cooldown parameters can be overridden per pool:
+
+```python
+pool = AsyncConnectionPool(
+    'dbname=mydb', min_size=2, max_size=10,
+    cooldown_initial=0.5, cooldown_max=30.0, cooldown_jitter=0.5)
+```
+
+#### Pool exceptions
+
+All pool exceptions inherit from `PoolError`, so a single `except
+PoolError` catches every failure mode:
+
+| Exception | Meaning |
+|-----------|---------|
+| `PoolClosed` | `acquire()` after `close()`. Permanent. |
+| `PoolTimeout` | Pool exhausted (`busy == max_size`). Transient. |
+| `PoolUnavailable` | Backend connect failed; breaker open. Retry after cooldown. |
+
+#### Pool status / healthcheck
+
+`pool.status()` returns a snapshot dict for healthchecks, metrics, and
+worker pause/resume logic:
+
+```python
+{
+    'min_size': 2, 'max_size': 10,
+    'size': 5, 'idle': 3, 'busy': 2,
+    'free': 8,                  # max_size - busy; how many acquire() will succeed
+    'closed': False,
+    'available': True,          # False while breaker is open
+    'consecutive_connect_failures': 0,
+    'retry_in': 0.0,            # seconds until breaker allows next probe
+}
+```
+
+`free == 0` means the pool is fully busy and the worker should pause
+accepting new requests until a `release()` frees a slot.
+`available == False` means the DB is currently unreachable and the
+worker should fail-fast new requests with 503.
+
+#### Graceful shutdown
+
+```python
+worker.draining = True       # 1. stop accepting new requests
+pool.cancel_busy()           # 2. server-side cancel of in-flight queries
+worker.run_once()            # 3. tick the loop so callbacks observe errors
+pool.close()                 # 4. close everything
+```
+
+`pool.cancel_busy()` is **blocking** (libpq `PGcancel` opens a fresh
+TCP connection synchronously); only call from shutdown code, never from
+inside the event loop.
 
 ---
 

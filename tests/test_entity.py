@@ -5,7 +5,9 @@ from dbentity.attribute import (
     IndexAttribute,
     StringAttribute,
     IntegerAttribute,
+    FixedPointAttribute,
     BooleanAttribute,
+    ConnectionAttribute,
 )
 
 
@@ -140,6 +142,64 @@ class TestEntityFormData(unittest.TestCase):
         self.assertEqual(entity.name, 'New')
         self.assertEqual(entity.age, 30)
         self.assertTrue(entity.updated)
+
+
+class TestEntitySetFromData(unittest.TestCase):
+    def test_basic(self):
+        entity = TestEntity(data={'name': 'Old', 'age': 20}, lock=False)
+        entity.set_from_data({'name': 'New', 'age': 30})
+        self.assertEqual(entity.name, 'New')
+        self.assertEqual(entity.age, 30)
+        self.assertTrue(entity.updated)
+
+    def test_ignores_index(self):
+        entity = TestEntity(data={'uid': 1, 'name': 'Old'}, lock=False)
+        entity.set_from_data({'uid': 99, 'name': 'New'})
+        self.assertEqual(entity.uid, 1)
+        self.assertEqual(entity.name, 'New')
+
+    def test_ignores_unknown_keys(self):
+        entity = TestEntity(data={'name': 'Old'}, lock=False)
+        entity.set_from_data({'name': 'New', 'nonexistent': 'value'})
+        self.assertEqual(entity.name, 'New')
+
+    def test_ignores_connection_attribute(self):
+        class WithConn(Entity):
+            ITEMS = (
+                IndexAttribute(),
+                StringAttribute('name'),
+                ConnectionAttribute('author'),
+            )
+        entity = WithConn(data={'name': 'Old'}, lock=False)
+        entity.set_from_data({'name': 'New', 'author': 'something'})
+        self.assertEqual(entity.name, 'New')
+        self.assertIsNone(entity._data.get('author'))
+
+    def test_tracks_updated(self):
+        entity = TestEntity(data={'name': 'Same'}, lock=False)
+        entity.set_from_data({'name': 'Same'})
+        self.assertFalse(entity.updated)
+        entity.set_from_data({'name': 'Different'})
+        self.assertTrue(entity.updated)
+
+    def test_from_value_conversion(self):
+        class FpEntity(Entity):
+            ITEMS = (
+                IndexAttribute(),
+                FixedPointAttribute('price', fp=2),
+            )
+        entity = FpEntity(data={}, lock=False)
+        entity.set_from_data({'price': 20.0})
+        self.assertEqual(entity._data['price'], 2000)
+
+    def test_partial_update(self):
+        entity = TestEntity(
+            data={'name': 'John', 'age': 25, 'active': True}, lock=False)
+        entity.set_from_data({'age': 30})
+        self.assertEqual(entity.name, 'John')
+        self.assertEqual(entity.age, 30)
+        self.assertTrue(entity.active)
+        self.assertEqual(entity._updated, {'age'})
 
 
 if __name__ == '__main__':

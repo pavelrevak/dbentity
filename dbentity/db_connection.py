@@ -3,6 +3,16 @@
 import time as _time
 
 
+def configure_nonblocking(conn):
+    """psycopg_pool ConnectionPool 'configure' callback.
+
+    Enables non-blocking libpq mode and autocommit on each pooled
+    connection so it can be used with `dbentity.db_async.AsyncQuery`.
+    """
+    conn.autocommit = True
+    conn.pgconn.nonblocking = 1
+
+
 class DbConnection:
     """Wrapper around database connection with optional SQL logging.
 

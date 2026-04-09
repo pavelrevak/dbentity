@@ -137,6 +137,22 @@ class Entity:
                 data[item.name] = item.to_json(value)
         return data
 
+    def set_from_data(self, params):
+        """Update entity from data dict (e.g. JSON).
+
+        Only SAVE-able, non-INDEX attributes are accepted.
+        Values are converted via from_value.
+        """
+        for item in self.ITEMS:
+            if not item.SAVE or item.INDEX:
+                continue
+            if item.name not in params:
+                continue
+            value = item.from_value(params[item.name])
+            if self._data.get(item.name) != value:
+                self._data[item.name] = value
+                self._updated.add(item.name)
+
     def set_from_form_data(self, params):
         """Update entity from form data dict using form_key mappings."""
         for item in self.ITEMS:

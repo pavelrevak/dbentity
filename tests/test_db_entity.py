@@ -95,6 +95,131 @@ class TestDbEntityInsert(unittest.TestCase):
             User._insert(unknown='value')
 
 
+class TestDbEntityUpsert(unittest.TestCase):
+    def test_upsert_default_updates_all_non_conflict_cols(self):
+        sql, args = User._upsert(
+            'name', name='John', age=30)
+        self.assertIn('INSERT INTO users', sql)
+        self.assertIn('(name, age)', sql)
+        self.assertIn('VALUES (%s, %s)', sql)
+        self.assertIn('ON CONFLICT (name)', sql)
+        self.assertIn('DO UPDATE SET', sql)
+        self.assertIn('age = EXCLUDED.age', sql)
+        # Conflict target itself must NOT be in the SET clause.
+        self.assertNotIn('name = EXCLUDED.name', sql)
+        self.assertIn('RETURNING', sql)
+        self.assertEqual(args, ['John', 30])
+
+    def test_upsert_multi_column_conflict(self):
+        sql, args = User._upsert(
+            ('name', 'age'), name='John', age=30)
+        self.assertIn('ON CONFLICT (name, age)', sql)
+        # Both targets excluded from SET → nothing to update → DO NOTHING.
+        self.assertIn('DO NOTHING', sql)
+        self.assertEqual(args, ['John', 30])
+
+    def test_upsert_explicit_update_list(self):
+        sql, args = User._upsert(
+            'name', update=['age'], name='John', age=30)
+        self.assertIn('ON CONFLICT (name)', sql)
+        self.assertIn('DO UPDATE SET age = EXCLUDED.age', sql)
+        self.assertEqual(args, ['John', 30])
+
+    def test_upsert_do_nothing_when_update_empty(self):
+        sql, _args = User._upsert(
+            'name', update=[], name='John', age=30)
+        self.assertIn('DO NOTHING', sql)
+        self.assertNotIn('DO UPDATE', sql)
+
+    def test_upsert_unknown_conflict_raises(self):
+        with self.assertRaises(DbEntityError):
+            User._upsert('nonexistent', name='John')
+
+    def test_upsert_unknown_update_raises(self):
+        with self.assertRaises(DbEntityError):
+            User._upsert(
+                'name', update=['nonexistent'], name='John', age=30)
+
+    def test_upsert_unknown_value_kwarg_raises(self):
+        with self.assertRaises(DbEntityError):
+            User._upsert('name', name='John', bogus=1)
+
+    def test_db_upsert_returns_entity(self):
+        class FakeRow:
+            def __init__(self, vals):
+                self.vals = vals
+
+            def fetchone(self):
+                return self.vals
+
+        class FakeDb:
+            def execute(self, sql, args):
+                self.last_sql = sql
+                self.last_args = args
+                # uid, name, age — order matches table_columns()
+                return FakeRow((42, 'John', 30))
+
+        db = FakeDb()
+        user = User.db_upsert(db, 'name', name='John', age=30)
+        self.assertEqual(user.uid, 42)
+        self.assertEqual(user.name, 'John')
+        self.assertEqual(user.age, 30)
+        self.assertIn('ON CONFLICT (name)', db.last_sql)
+
+    def test_db_upsert_returns_none_on_do_nothing_conflict(self):
+        class FakeDb:
+            def execute(self, sql, args):
+                class R:
+                    def fetchone(self_inner):
+                        return None
+                return R()
+
+        result = User.db_upsert(
+            FakeDb(), 'name', update=[], name='John', age=30)
+        self.assertIsNone(result)
+
+    def test_upsert_from_data_filters_keys(self):
+        captured = {}
+
+        class FakeDb:
+            def execute(self, sql, args):
+                captured['sql'] = sql
+                captured['args'] = args
+
+                class R:
+                    def fetchone(self_inner):
+                        return (1, 'John', 30)
+                return R()
+
+        # 'uid' (INDEX) and 'unknown' must be silently ignored.
+        User.upsert_from_data(
+            FakeDb(),
+            {'uid': 999, 'name': 'John', 'age': 30, 'unknown': 'x'},
+            conflict='name')
+        self.assertIn('ON CONFLICT (name)', captured['sql'])
+        self.assertEqual(captured['args'], ['John', 30])
+
+    def test_upsert_from_data_extra_kwargs_override(self):
+        captured = {}
+
+        class FakeDb:
+            def execute(self, sql, args):
+                captured['args'] = args
+
+                class R:
+                    def fetchone(self_inner):
+                        return (1, 'Jane', 25)
+                return R()
+
+        User.upsert_from_data(
+            FakeDb(),
+            {'name': 'John', 'age': 30},
+            conflict='name',
+            age=25)
+        # kwargs override params dict
+        self.assertEqual(captured['args'], ['John', 25])
+
+
 class TestDbEntityNestedData(unittest.TestCase):
     def test_set_data_with_nested_entity(self):
         data = {

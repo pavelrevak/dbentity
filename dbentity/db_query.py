@@ -1,6 +1,11 @@
 """SQL query builders for SELECT, DELETE, COUNT, DISTINCT, COUNT BY operations."""
 
+import re as _re
+
 import dbentity.db_control as _db_control
+
+
+_PG_PLACEHOLDER_RE = _re.compile(rb'%s')
 
 
 class QueryError(Exception):
@@ -12,6 +17,7 @@ class BaseQuery:
     def __init__(self, entity, *args, **kwargs):
         self._entity = entity
         self._where = _db_control.And(*args, **kwargs)
+        self._pg_query_bytes_cache = None
         self._prepare(*args, **kwargs)
 
     @property
@@ -32,6 +38,28 @@ class BaseQuery:
     @property
     def args(self):
         return self._where.args
+
+    @property
+    def pg_query_bytes(self):
+        """PostgreSQL-native query bytes with $1, $2, ... placeholders.
+
+        Suitable for psycopg3 PGconn.send_query_params() (low-level libpq).
+        Existing query_str (with %s) remains for cursor.execute() callers.
+        Cached after first access.
+
+        Note: substitution is a naive `%s` -> `$N` regex replacement.
+        It assumes `%s` only ever appears as a DB-API placeholder, never
+        inside a string literal. dbentity always passes literals through
+        `args`, so this holds for queries built by Select/Distinct/etc.
+        """
+        if self._pg_query_bytes_cache is None:
+            counter = [0]
+            def _repl(_match):
+                counter[0] += 1
+                return f'${counter[0]}'.encode()
+            self._pg_query_bytes_cache = _PG_PLACEHOLDER_RE.sub(
+                _repl, self.query_str.encode())
+        return self._pg_query_bytes_cache
 
 
 class Select(BaseQuery):

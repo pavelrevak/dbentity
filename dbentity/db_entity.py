@@ -238,6 +238,128 @@ class DbEntity(_entity.Entity):
         return None
 
     @classmethod
+    def _upsert(cls, conflict, update=None, **kwargs):
+        """Build INSERT ... ON CONFLICT ... RETURNING SQL.
+
+        Args:
+            conflict: attribute name (str) or tuple/list of attribute
+                names whose db_keys form the ON CONFLICT target. The
+                target columns must be backed by a UNIQUE constraint
+                or unique index in the schema.
+            update: optional iterable of attribute names to update on
+                conflict. ``None`` (default) updates every column being
+                inserted except the conflict target itself. Pass an
+                empty list/tuple to get DO NOTHING semantics (in which
+                case PG returns no row on conflict).
+            **kwargs: column values, same shape as ``create()``.
+        """
+        if isinstance(conflict, str):
+            conflict_names = (conflict,)
+        else:
+            conflict_names = tuple(conflict)
+        conflict_cols = []
+        for name in conflict_names:
+            item = cls.get_item(name)
+            if not item or not item.db_key:
+                raise DbEntityError(
+                    f"Unknown conflict column '{name}'")
+            conflict_cols.append(item.db_key)
+
+        insert_columns = []
+        insert_values = []
+        insert_args = []
+        for key, val in kwargs.items():
+            item = cls.get_item(key)
+            if not item:
+                raise DbEntityError(f"Unknown argument '{key}'")
+            if (item.SAVE or item.CREATE) and item.db_key:
+                insert_columns.append(item.db_key)
+                insert_values.append('%s')
+                insert_args.append(item.from_value(val))
+
+        if update is None:
+            update_cols = [
+                c for c in insert_columns if c not in conflict_cols]
+        else:
+            update_cols = []
+            for name in update:
+                item = cls.get_item(name)
+                if not item or not item.db_key:
+                    raise DbEntityError(
+                        f"Unknown update column '{name}'")
+                update_cols.append(item.db_key)
+
+        sql = f"INSERT INTO {cls.TABLE}"
+        sql += f" ({', '.join(insert_columns)})"
+        sql += f" VALUES ({', '.join(insert_values)})"
+        sql += f" ON CONFLICT ({', '.join(conflict_cols)})"
+        if update_cols:
+            sets = ', '.join(
+                f"{c} = EXCLUDED.{c}" for c in update_cols)
+            sql += f" DO UPDATE SET {sets}"
+        else:
+            sql += " DO NOTHING"
+        sql += f" RETURNING {', '.join(cls.select_parts())};"
+        return sql, insert_args
+
+    @classmethod
+    def db_upsert(cls, db, conflict, update=None, **kwargs):
+        """INSERT or UPDATE on conflict, return the resulting entity.
+
+        Returns the entity row whether it was newly inserted or updated
+        (PG ``RETURNING`` fires for both branches of ON CONFLICT DO
+        UPDATE). Returns ``None`` only if DO NOTHING was requested
+        (``update=[]``) and a conflict occurred — in that case PG
+        returns no row.
+
+        Note: PG calls ``nextval()`` on the id sequence for every
+        upsert call, even when the UPDATE branch is taken. With
+        ``SERIAL`` PKs at high upsert rates this can burn id space;
+        prefer ``BIGSERIAL`` or natural keys for hot upsert paths.
+        """
+        sql, args = cls._upsert(conflict, update=update, **kwargs)
+        row = db.execute(sql, args).fetchone()
+        if row:
+            return cls(zip(cls.table_columns(), row))
+        return None
+
+    @classmethod
+    def upsert_from_data(cls, db, params, conflict, update=None, **kwargs):
+        """Upsert entity from data dict (e.g. JSON).
+
+        Symmetric with ``create_from_data``: only SAVE-able, non-INDEX
+        attributes are accepted from ``params`` and converted via
+        ``from_value``. ``conflict`` and ``update`` have the same
+        semantics as ``db_upsert``.
+        """
+        data = {}
+        for item in cls.ITEMS:
+            if not item.SAVE or item.INDEX:
+                continue
+            if item.name not in params:
+                continue
+            data[item.name] = item.from_value(params[item.name])
+        data.update(kwargs)
+        return cls.db_upsert(db, conflict, update=update, **data)
+
+    @classmethod
+    def create_from_data(cls, db, params, **kwargs):
+        """Create entity from data dict (e.g. JSON).
+
+        Only SAVE-able, non-INDEX attributes are accepted.
+        Values are converted via from_value.
+        """
+        data = {}
+        for item in cls.ITEMS:
+            if not item.SAVE or item.INDEX:
+                continue
+            if item.name not in params:
+                continue
+            data[item.name] = item.from_value(params[item.name])
+        data.update(kwargs)
+        return cls.create(db, **data)
+
+    @classmethod
     def create_from_form_data(cls, db, params, **kwargs):
         """Create entity from form data using form_key mappings."""
         data = {}
